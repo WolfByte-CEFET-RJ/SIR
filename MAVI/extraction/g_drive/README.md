@@ -1,0 +1,2 @@
+Extrai os dados do google drive.  
+É necessário o arquivo *credentials.json*, que pode ser criado através do [guia oficial](https://developers.google.com/workspace/drive/api/quickstart/python#authorize_credentials_for_a_desktop_application).
