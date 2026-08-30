@@ -10,7 +10,7 @@ from googleapiclient.discovery import build, Resource
 # Escopos padrão necessários para acessar a API do Google Drive (apenas leitura por padrão)
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
-def get_g_drive_service(scopes: list[str] = SCOPES) -> Resource:
+def get_google_drive_service(scopes: list[str] = SCOPES) -> Resource:
     """
     Requer credentials.json para acessar a API do Google Drive 
     Autentica o usuário e retorna um cliente de serviço para a API do Google Drive.

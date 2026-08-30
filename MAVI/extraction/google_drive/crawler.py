@@ -71,13 +71,13 @@ if __name__ == "__main__":
     import argparse
     import os
     import json
-    from auth import get_g_drive_service
+    from auth import get_google_drive_service
 
     parser = argparse.ArgumentParser(description="Constrói uma árvore de diretórios aninhada para uma pasta do Google Drive.")
     parser.add_argument("root_folder_id", type=str, help="O ID da pasta raiz no Google Drive para construir a árvore.")
     args = parser.parse_args()
 
-    service = get_g_drive_service()
+    service = get_google_drive_service()
 
     root_folder_id = args.root_folder_id
     tree = get_gdrive_tree(service, root_folder_id)
