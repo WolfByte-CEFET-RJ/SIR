@@ -62,4 +62,12 @@ def get_g_drive_service(scopes: list[str] = SCOPES) -> Resource:
                 print(f"Salvando credenciais em {token_path}")
                 token.write(creds.to_json())
 
-    return build('drive', 'v3', credentials=creds)
+        service = build('drive', 'v3', credentials=creds)
+
+        try:
+            about = service.about().get(fields="user(displayName, emailAddress)").execute()
+            print(f"Autenticado como: {about['user']['displayName']} ({about['user']['emailAddress']})")
+        except Exception as e:
+            print(f"Erro na autenticação: {e}")
+
+    return service
