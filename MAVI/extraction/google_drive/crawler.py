@@ -18,8 +18,8 @@ def get_gdrive_tree(service: Resource, root_folder_id: str, files_metadata: str 
     
     def _build_subtree(folder_id: str) -> tuple[list[dict], list[dict]]:
         """Recursive helper to fetch files and subfolders with full pagination support."""
-        files = []
-        folders = []
+        files = {}
+        folders = {}
         page_token = None
 
         while True:
@@ -41,15 +41,14 @@ def get_gdrive_tree(service: Resource, root_folder_id: str, files_metadata: str 
                     # Explora as sub-pastas por recursão
                     sub_files, sub_folders = _build_subtree(sub_id)
                     
-                    folders.append({
-                        sub_id: {
-                            "name": sub_name,
-                            "files": sub_files,
-                            "folders": sub_folders
-                        }
-                    })
+                    folders[sub_id] = {
+                        "name": sub_name,
+                        "files": sub_files,
+                        "folders": sub_folders
+                    }
                 else:
-                    files.append(item)
+                    file_id = item.pop('id')
+                    files[file_id] = item
 
             page_token = results.get('nextPageToken')
             if not page_token:
