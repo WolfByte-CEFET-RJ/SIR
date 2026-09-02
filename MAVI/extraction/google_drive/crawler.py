@@ -3,7 +3,7 @@ from googleapiclient.discovery import Resource
 
 FILES_METADATA = "createdTime, modifiedTime, version"
 
-def get_gdrive_tree(service: Resource, root_folder_id: str, files_metadata: str = FILES_METADATA) -> dict[str, dict]:
+def get_google_drive_tree(service: Resource, root_folder_id: str, files_metadata: str = FILES_METADATA) -> dict[str, dict]:
     """
     Retorna uma árvore de diretórios aninhada para uma pasta do Google Drive, incluindo arquivos e subpastas.
     A função percorre recursivamente a pasta raiz e suas subpastas, coletando informações sobre arquivos e pastas,
@@ -58,13 +58,14 @@ def get_gdrive_tree(service: Resource, root_folder_id: str, files_metadata: str 
 
     root_files, root_folders = _build_subtree(root_folder_id)
 
-    return {
+    tree = {
         root_folder_id: {
             "name": root_name,
             "files": root_files,
             "folders": root_folders
         }
     }
+    return tree
 
 if __name__ == "__main__":
     import argparse
@@ -79,10 +80,10 @@ if __name__ == "__main__":
     service = get_google_drive_service()
 
     root_folder_id = args.root_folder_id
-    tree = get_gdrive_tree(service, root_folder_id)
+    tree = get_google_drive_tree(service, root_folder_id)
     
     base_dir = os.path.dirname(__file__)
-    save_path = os.path.join(base_dir, "output", f"gdrive_tree_{root_folder_id}.json")
+    save_path = os.path.join(base_dir, "output", f"tree_{root_folder_id}.json")
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(tree, f, indent=4)
