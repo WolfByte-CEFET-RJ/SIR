@@ -1,6 +1,8 @@
 import io
 from googleapiclient.http import MediaIoBaseDownload
 from collections.abc import Iterator
+from pypdf import PdfReader
+from docx import Document
 
 def get_text_from_google_doc(service, file_id, output_type='text/markdown') -> str:
     """
@@ -20,6 +22,35 @@ def get_text_from_google_doc(service, file_id, output_type='text/markdown') -> s
     text = file_stream.getvalue().decode('utf-8')
     return text
 
+def get_text_from_pdf(service, file_id) -> str:
+
+    request = service.files().get_media(fileId=file_id) # tem que ser get_media pra arquivos nao nativos do google
+    file_stream = io.BytesIO()
+    downloader = MediaIoBaseDownload(file_stream, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+
+    # jogar pro pypdf
+    file_stream.seek(0)
+    reader = PdfReader(file_stream)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
+
+def get_text_from_docx(service, file_id) -> str:
+    request = service.files().get_media(fileId=file_id)
+    file_stream = io.BytesIO()
+    downloader = MediaIoBaseDownload(file_stream, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    # agora jogar pro docx
+    file_stream.seek(0)
+    doc = Document(file_stream)
+    text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    return text
 
 def get_content_from_google(service, file_id, mime_type) -> str | None:
     """
@@ -30,10 +61,15 @@ def get_content_from_google(service, file_id, mime_type) -> str | None:
             print(f"Extraindo conteúdo do Google Doc (ID: {file_id})")
             return get_text_from_google_doc(service, file_id)
         case 'application/pdf':
-            # TODO pdf extraction
+            # gabriel brincou aqui tem que revisar:
+            print(f"Extraindo conteúdo do PDF ? (ID: {file_id})")
+            return get_text_from_pdf(service,file_id)
+        
             pass
         case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-            # TODO docx extraction
+            # aqui tb
+            print(f"Extraindo conteúdo do DOCX (ID: {file_id})")
+            return get_text_from_docx(service,file_id)
             pass
     return None
 
