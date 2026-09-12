@@ -4,35 +4,37 @@ from collections.abc import Iterator
 from pypdf import PdfReader
 from docx import Document
 
+def get_file_stream(request) -> io.BytesIO:
+    """
+    Baixa um arquivo do Google Drive e retorna um objeto BytesIO referente ao arquivo.
+    """
+    file_stream = io.BytesIO()
+    downloader = MediaIoBaseDownload(file_stream,request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    return file_stream
+
 def get_text_from_google_doc(service, file_id, output_type='text/markdown') -> str:
     """
     Extrai o conteúdo de um Google Doc e retorna como uma string.
     output_type: O tipo MIME do formato de saída. Ver https://developers.google.com/workspace/drive/api/guides/ref-export-formats
     """
     request = service.files().export_media(fileId=file_id, mimeType=output_type)
-
-    file_stream = io.BytesIO()
-    downloader = MediaIoBaseDownload(file_stream, request)
-    done = False
-
-    while not done:
-        status, done = downloader.next_chunk()
+    file_stream = get_file_stream(request)
 
     # Convert the downloaded bytes into a Python string
     text = file_stream.getvalue().decode('utf-8')
     return text
 
 def get_text_from_pdf(service, file_id) -> str:
-
+    """
+    Extrai o conteúdo de um arquivo PDF e retorna como uma string.
+    P.S: deve ser modificada para exportar o texto como markdown
+    """
     request = service.files().get_media(fileId=file_id) # tem que ser get_media pra arquivos nao nativos do google
-    file_stream = io.BytesIO()
-    downloader = MediaIoBaseDownload(file_stream, request)
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
+    file_stream = get_file_stream(request)
 
-    # jogar pro pypdf
-    file_stream.seek(0)
     reader = PdfReader(file_stream)
     text = ""
     for page in reader.pages:
@@ -40,14 +42,13 @@ def get_text_from_pdf(service, file_id) -> str:
     return text
 
 def get_text_from_docx(service, file_id) -> str:
+    """
+    Extrai o conteúdo de um arquivo DOCX e retorna como uma string.
+    P.S: deve ser modificada para exportar o texto como markdown
+    """
     request = service.files().get_media(fileId=file_id)
-    file_stream = io.BytesIO()
-    downloader = MediaIoBaseDownload(file_stream, request)
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
-    # agora jogar pro docx
-    file_stream.seek(0)
+    file_stream = get_file_stream(request)
+    
     doc = Document(file_stream)
     text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
     return text
@@ -60,17 +61,15 @@ def get_content_from_google(service, file_id, mime_type) -> str | None:
         case 'application/vnd.google-apps.document':
             print(f"Extraindo conteúdo do Google Doc (ID: {file_id})")
             return get_text_from_google_doc(service, file_id)
+        
         case 'application/pdf':
-            # gabriel brincou aqui tem que revisar:
-            print(f"Extraindo conteúdo do PDF ? (ID: {file_id})")
+            print(f"Extraindo conteúdo do PDF (ID: {file_id})")
             return get_text_from_pdf(service,file_id)
         
-            pass
         case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-            # aqui tb
             print(f"Extraindo conteúdo do DOCX (ID: {file_id})")
-            return get_text_from_docx(service,file_id)
-            pass
+            return get_text_from_docx(service,file_id) 
+          
     return None
 
 def get_content_from_tree(service, tree: dict, current_path="") -> Iterator[dict[str, str]]:
