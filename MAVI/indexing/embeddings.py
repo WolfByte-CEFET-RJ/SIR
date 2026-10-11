@@ -180,16 +180,17 @@ def gerar_embedding_gemini(texto: str):
 # FUNCAO PRINCIPAL: escolhe o provider conforme a variavel de ambiente
 # ---------------------------------------------------------------------------
 
-def gerar_embedding(texto: str):
-    if PROVIDER == "local":
+def gerar_embedding(texto: str, provider: str = PROVIDER):
+    if provider == "local":
         return gerar_embedding_local(texto)
-    elif PROVIDER == "openai":
+    elif provider == "openai":
         return gerar_embedding_openai(texto)
-    elif PROVIDER == "voyage":
+    elif provider == "voyage":
         return gerar_embedding_voyage(texto)
-    elif PROVIDER == "gemini":
+    elif provider == "gemini":
         return gerar_embedding_gemini(texto)
-    elif PROVIDER == "none":
-        return None
+    elif provider == "none":
+        raise ValueError("Provider de embedding 'none' nao gera embeddings. Use outro provider ou configure MAVI_EMBEDDING_PROVIDER.")
     else:
-        raise ValueError(f"Provider de embedding desconhecido: '{PROVIDER}'")
+        raise ValueError(f"Provider de embedding desconhecido: '{provider}'")
+
