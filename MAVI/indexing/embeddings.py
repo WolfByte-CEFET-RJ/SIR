@@ -28,10 +28,8 @@ Opcoes disponiveis:
                a dimensao da coluna 'embedding' para 1024.
 
   "gemini"  -> Usa a API do Google Gemini (GRATUITA, sem cartao de
-               credito - via Google AI Studio). Modelo
-               gemini-embedding-001, 3072 dimensoes por padrao (pode
-               ser reduzido via output_dimensionality, ver funcao
-               abaixo). Requer GEMINI_API_KEY configurada e ajustar
+               credito - via Google AI Studio). 
+               Requer GEMINI_API_KEY configurada e ajustar
                a dimensao da coluna 'embedding' para bater com o
                valor escolhido.
 
@@ -148,7 +146,7 @@ def gerar_embedding_voyage(texto: str):
 # OPCAO 4: Google Gemini (gratuito, sem cartao de credito - via Google AI Studio)
 # ---------------------------------------------------------------------------
 
-def gerar_embedding_gemini(texto: str):
+def gerar_embedding_gemini(texto: str, output_dimensionality: int = 3072):
     """
     Requer: pip install google-genai
     Requer: variavel de ambiente GEMINI_API_KEY configurada
@@ -159,10 +157,8 @@ def gerar_embedding_gemini(texto: str):
       3. Clique em "Get API key"
       4. Copie a chave gerada
 
-    Dimensao: o modelo gemini-embedding-001 retorna 3072 numeros por
-    padrao. Aqui pedimos 768 explicitamente (output_dimensionality),
-    que e menor, mais rapido de buscar, e continua com boa qualidade -
-    mas o valor DEVE bater com a coluna VECTOR(N) do schema.sql.
+    output_dimensionality: Dimensao do embedding, 3072 por padrão.
+    Dimensões menores podem ser mais rapidas e economizam espaço, mas podem perder qualidade.
     """
     from google import genai
     from google.genai import types
@@ -171,7 +167,7 @@ def gerar_embedding_gemini(texto: str):
     resposta = client.models.embed_content(
         model="gemini-embedding-2",
         contents=texto,
-        config=types.EmbedContentConfig(output_dimensionality=768),
+        config=types.EmbedContentConfig(output_dimensionality=output_dimensionality),
     )
     return resposta.embeddings[0].values
 
