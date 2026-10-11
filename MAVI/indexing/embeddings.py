@@ -169,7 +169,7 @@ def gerar_embedding_gemini(texto: str):
 
     client = genai.Client()  # le a chave automaticamente de GEMINI_API_KEY
     resposta = client.models.embed_content(
-        model="gemini-embedding-001",
+        model="gemini-embedding-2",
         contents=texto,
         config=types.EmbedContentConfig(output_dimensionality=768),
     )
