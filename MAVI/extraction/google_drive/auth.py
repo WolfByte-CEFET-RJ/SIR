@@ -69,5 +69,6 @@ def get_google_drive_service(scopes: list[str] = SCOPES) -> Resource:
             print(f"Autenticado como: {about['user']['displayName']} ({about['user']['emailAddress']})")
         except Exception as e:
             print(f"Erro na autenticação: {e}")
+    service = build('drive', 'v3', credentials=creds)
 
     return service

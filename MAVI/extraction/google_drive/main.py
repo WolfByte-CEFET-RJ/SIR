@@ -4,7 +4,7 @@ from pathlib import Path
 
 from auth import get_google_drive_service
 from crawler import get_google_drive_tree
-from extractor import get_content_from_tree
+from extractor import GoogleDriveExtractor
 
 def run_pipeline(root_folder_id: str, output_dir: Path, save_tree: bool=False):
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -19,9 +19,10 @@ def run_pipeline(root_folder_id: str, output_dir: Path, save_tree: bool=False):
     
     content_save_path = output_dir / f"parsed_{root_folder_id}.jsonl"
     
+    extractor = GoogleDriveExtractor(service)
     count = 0
     with open(content_save_path, "w", encoding="utf-8") as f:
-        for file_meta in get_content_from_tree(service, tree):
+        for file_meta in extractor.get_content_from_tree(tree):
             f.write(json.dumps(file_meta, ensure_ascii=False) + "\n")
             count += 1
 
