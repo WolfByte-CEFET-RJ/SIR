@@ -36,38 +36,36 @@ def get_google_drive_service(scopes: list[str] = SCOPES) -> Resource:
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, scopes)
     
-    # Se não temos credenciais ou se as credenciais atuais são inválidas
-    if not creds or not creds.valid:
-        print("Nenhuma credencial válida encontrada. Verificando opções...")
-        
-        # Tenta atualizar as credenciais se elas estiverem expiradas e houver um token de atualização (refresh token)
-        if creds and creds.expired and creds.refresh_token:
-            print("Tentando atualizar credenciais expiradas...")
-            try:
-                creds.refresh(Request())
-            except RefreshError:
-                print("O token de atualização é inválido ou foi revogado. Forçando re-autenticação...")
-                creds = None  # Reseta as credenciais para que o bloco seguinte seja acionado
-                if os.path.exists(token_path):
-                    os.remove(token_path)  # Remove o arquivo corrompido/expirado
-
-        # Se a atualização falhou ou não tínhamos credenciais, inicia o fluxo no navegador
-        if not creds:
-            print("Iniciando fluxo de autorização...")
-            flow = InstalledAppFlow.from_client_secrets_file(cred_path, scopes)
-            creds = flow.run_local_server(port=0)
-
-            # Salva as novas credenciais válidas para execuções futuras
-            with open(token_path, 'w') as token:
-                print(f"Salvando credenciais em {token_path}")
-                token.write(creds.to_json())
-
-        service = build('drive', 'v3', credentials=creds)
-
+    # Atualiza as credenciais se estiverem expiradas e houver um token de atualização
+    if creds and creds.expired and creds.refresh_token:
+        print("Tentando atualizar credenciais expiradas.")
         try:
-            about = service.about().get(fields="user(displayName, emailAddress)").execute()
-            print(f"Autenticado como: {about['user']['displayName']} ({about['user']['emailAddress']})")
-        except Exception as e:
-            print(f"Erro na autenticação: {e}")
+            creds.refresh(Request())
+        except RefreshError:
+            print("O token de atualização é inválido ou foi revogado. Forçando re-autenticação")
+            creds = None
+
+    # Se a atualização falhou ou não tínhamos credenciais, inicia o fluxo no navegador
+    if not creds:
+        print("Iniciando fluxo de autorização.")
+        flow = InstalledAppFlow.from_client_secrets_file(cred_path, scopes)
+        creds = flow.run_local_server(port=0)
+
+    # Verifica se as credenciais são válidas antes de criar o serviço
+    if not creds or not creds.valid:
+        raise Exception("Falha na autenticação. Nenhuma credencial válida disponível")
+
+    try:
+        service = build('drive', 'v3', credentials=creds)
+    except Exception as e:
+        print(f"Erro ao criar o serviço do Google Drive: {e}")
+
+    about = service.about().get(fields="user(displayName, emailAddress)").execute()
+    print(f"Autenticado como: {about['user']['displayName']} ({about['user']['emailAddress']})")
+
+    # Salva as novas credenciais válidas para execuções futuras
+    with open(token_path, 'w') as token:
+        print(f"Salvando credenciais em {token_path}")
+        token.write(creds.to_json())
 
     return service
