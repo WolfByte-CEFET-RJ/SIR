@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 from google.auth.exceptions import RefreshError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -27,13 +27,12 @@ def get_google_drive_service(scopes: list[str] = SCOPES) -> Resource:
     """
     creds = None
 
-    # Caminhos relativos ao próprio módulo (MAVI\extraction\g_drive\credentials.json)
-    base_dir = os.path.dirname(__file__)
-    cred_path = os.path.join(base_dir, 'credentials.json')
-    token_path = os.path.join(base_dir, 'token.json')
+    credentials_dir = Path(__file__).resolve().parent / ".credentials"
+    cred_path = credentials_dir / "credentials.json"
+    token_path = credentials_dir / "token.json"
 
     # Verifica se já temos um arquivo de token armazenado localmente
-    if os.path.exists(token_path):
+    if token_path.exists():
         creds = Credentials.from_authorized_user_file(token_path, scopes)
     
     # Atualiza as credenciais se estiverem expiradas e houver um token de atualização
