@@ -2,9 +2,9 @@ import argparse
 import json
 from pathlib import Path
 
-from auth import get_google_drive_service
-from crawler import get_google_drive_tree
-from extractor import get_content_from_tree
+from .auth import get_google_drive_service
+from .crawler import get_google_drive_tree
+from .loader import get_content_from_tree
 
 def run_pipeline(root_folder_id: str, output_dir: Path, save_tree: bool=False):
     output_dir.mkdir(parents=True, exist_ok=True)
