@@ -9,10 +9,11 @@ def get_file_stream(request) -> io.BytesIO:
     Baixa um arquivo do Google Drive e retorna um objeto BytesIO referente ao arquivo.
     """
     file_stream = io.BytesIO()
-    downloader = MediaIoBaseDownload(file_stream,request)
+    downloader = MediaIoBaseDownload(file_stream, request)
     done = False
     while not done:
         status, done = downloader.next_chunk()
+    file_stream.seek(0)
     return file_stream
 
 def get_text_from_google_doc(service, file_id, output_type='text/markdown') -> str:
@@ -60,7 +61,7 @@ def get_content_from_google(service, file_id, mime_type) -> str | None:
     match mime_type:
         case 'application/vnd.google-apps.document':
             print(f"Extraindo conteúdo do Google Doc (ID: {file_id})")
-            return get_text_from_google_doc(service, file_id)
+            return get_text_from_google_doc(service, file_id, output_type="text/markdown")
         
         case 'application/pdf':
             print(f"Extraindo conteúdo do PDF (ID: {file_id})")
