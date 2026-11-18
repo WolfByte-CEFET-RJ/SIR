@@ -102,7 +102,7 @@ def get_content_from_google(
         logger.info("Extracting native Google Doc (ID: %s)", file_id)
         return get_text_from_google_doc(service, file_id, output_type="text/markdown")
 
-    # --- 2. Skip Google-native formats we don't handle (Sheets, Slides, etc.) ---
+    # --- 2. Skip other Google-native formats we don't handle (Sheets, Slides, etc.) ---
     if mime_type.startswith("application/vnd.google-apps."):
         logger.debug("Skipping unsupported Google Workspace type '%s' (ID: %s)", mime_type, file_id)
         return None

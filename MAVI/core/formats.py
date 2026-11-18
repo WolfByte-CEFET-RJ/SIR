@@ -45,6 +45,12 @@ ALLOWED_PARSE_TYPES: set[FileType] = {
     FileType.TXT,
 }
 
+# Formats that are natively plain text and require no model-based conversion
+PLAIN_TEXT_TYPES: set[FileType] = {
+    FileType.MD,
+    FileType.TXT,
+}
+
 
 def detect_file_type(file_name: str) -> FileType | None:
     """
