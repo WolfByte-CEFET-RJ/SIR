@@ -5,10 +5,11 @@ from pathlib import Path
 from .auth import get_google_drive_service
 from .crawler import get_google_drive_tree
 from .loader import get_content_from_tree
+from MAVI.parser import get_parser
 
-def run_pipeline(root_folder_id: str, output_dir: Path, save_tree: bool=False):
+def run_pipeline(root_folder_id: str, output_dir: Path, save_tree: bool = False):
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     service = get_google_drive_service()
     tree = get_google_drive_tree(service, root_folder_id)
 
@@ -16,12 +17,13 @@ def run_pipeline(root_folder_id: str, output_dir: Path, save_tree: bool=False):
         tree_save_path = output_dir / f"tree_{root_folder_id}.json"
         with open(tree_save_path, "w", encoding="utf-8") as f:
             json.dump(tree, f, indent=4, ensure_ascii=False)
-    
+
     content_save_path = output_dir / f"parsed_{root_folder_id}.jsonl"
-    
+    parser = get_parser()
+
     count = 0
     with open(content_save_path, "w", encoding="utf-8") as f:
-        for file_meta in get_content_from_tree(service, tree):
+        for file_meta in get_content_from_tree(service, tree, parser=parser):
             f.write(json.dumps(file_meta, ensure_ascii=False) + "\n")
             count += 1
 

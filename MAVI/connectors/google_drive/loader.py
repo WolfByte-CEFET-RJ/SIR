@@ -1,102 +1,197 @@
+"""
+MAVI/connectors/google_drive/loader.py
+
+Google Drive content downloader and format-aware routing layer.
+
+Responsibilities
+----------------
+* Route native Google Docs to the Drive export API (returns Markdown directly).
+* Validate every other file against the ALLOWED_FILE_TYPES allowlist before
+  downloading any bytes — skips spreadsheets and unknown formats early.
+* Download binary files as an in-memory BytesIO stream.
+* Delegate stream → Markdown conversion to an injected DocumentParser so this
+  module never imports `docling` or any other heavy backend.
+"""
+
+from __future__ import annotations
+
 import io
-from googleapiclient.http import MediaIoBaseDownload
+import logging
 from collections.abc import Iterator
-from pypdf import PdfReader
-from docx import Document
+
+from googleapiclient.http import MediaIoBaseDownload
+
+from MAVI.core.formats import ALLOWED_PARSE_TYPES, FileType, detect_file_type
+from MAVI.parser.base import DocumentParser
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Low-level helpers
+# ---------------------------------------------------------------------------
 
 def get_file_stream(request) -> io.BytesIO:
     """
-    Baixa um arquivo do Google Drive e retorna um objeto BytesIO referente ao arquivo.
+    Download a Drive media request and return a seeked-to-zero BytesIO buffer.
     """
     file_stream = io.BytesIO()
     downloader = MediaIoBaseDownload(file_stream, request)
     done = False
     while not done:
-        status, done = downloader.next_chunk()
+        _status, done = downloader.next_chunk()
     file_stream.seek(0)
     return file_stream
 
-def get_text_from_google_doc(service, file_id, output_type='text/markdown') -> str:
+
+def get_text_from_google_doc(service, file_id: str, output_type: str = "text/markdown") -> str:
     """
-    Extrai o conteúdo de um Google Doc e retorna como uma string.
-    output_type: O tipo MIME do formato de saída. Ver https://developers.google.com/workspace/drive/api/guides/ref-export-formats
+    Export a native Google Doc via the Drive API and return its content as a
+    UTF-8 string.
+
+    Parameters
+    ----------
+    output_type:
+        Target MIME type. See
+        https://developers.google.com/workspace/drive/api/guides/ref-export-formats
     """
     request = service.files().export_media(fileId=file_id, mimeType=output_type)
     file_stream = get_file_stream(request)
+    return file_stream.getvalue().decode("utf-8")
 
-    # Convert the downloaded bytes into a Python string
-    text = file_stream.getvalue().decode('utf-8')
-    return text
 
-def get_text_from_pdf(service, file_id) -> str:
-    """
-    Extrai o conteúdo de um arquivo PDF e retorna como uma string.
-    P.S: deve ser modificada para exportar o texto como markdown
-    """
-    request = service.files().get_media(fileId=file_id) # tem que ser get_media pra arquivos nao nativos do google
-    file_stream = get_file_stream(request)
+# ---------------------------------------------------------------------------
+# Main router
+# ---------------------------------------------------------------------------
 
-    reader = PdfReader(file_stream)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+def get_content_from_google(
+    service,
+    file_id: str,
+    mime_type: str,
+    file_name: str | None = None,
+    parser: DocumentParser | None = None,
+) -> str | None:
+    """
+    Route a Drive file to the appropriate extraction strategy and return its
+    content as a Markdown string, or ``None`` when the file should be skipped.
 
-def get_text_from_docx(service, file_id) -> str:
+    Parameters
+    ----------
+    service:
+        Authenticated Google Drive API resource.
+    file_id:
+        Drive file ID.
+    mime_type:
+        MIME type as reported by the Drive API.
+    file_name:
+        Original filename (including extension).  If omitted, the name is
+        fetched via a lightweight metadata API call.
+    parser:
+        A :class:`~MAVI.parser.base.DocumentParser` instance used to convert
+        binary streams to Markdown.  When ``None``, binary files that require
+        conversion are logged and skipped.
+
+    Returns
+    -------
+    str | None
+        Markdown text, or ``None`` if the file was filtered out or no parser
+        was provided for a binary format.
     """
-    Extrai o conteúdo de um arquivo DOCX e retorna como uma string.
-    P.S: deve ser modificada para exportar o texto como markdown
-    """
+    # --- 1. Native Google Docs: export directly as Markdown ---
+    if mime_type == "application/vnd.google-apps.document":
+        logger.info("Extracting native Google Doc (ID: %s)", file_id)
+        return get_text_from_google_doc(service, file_id, output_type="text/markdown")
+
+    # --- 2. Skip Google-native formats we don't handle (Sheets, Slides, etc.) ---
+    if mime_type.startswith("application/vnd.google-apps."):
+        logger.debug("Skipping unsupported Google Workspace type '%s' (ID: %s)", mime_type, file_id)
+        return None
+
+    # --- 3. Resolve file_name if not provided ---
+    if file_name is None:
+        logger.debug("file_name not supplied for ID %s — fetching metadata", file_id)
+        file_name = service.files().get(fileId=file_id, fields="name").execute()["name"]
+
+    # --- 4. Validate file type against the allowlist ---
+    file_type: FileType | None = detect_file_type(file_name)
+
+    if file_type is None:
+        logger.info("Skipping '%s' (ID: %s): unrecognised extension", file_name, file_id)
+        return None
+
+    if file_type not in ALLOWED_PARSE_TYPES:
+        logger.info(
+            "Skipping '%s' (ID: %s): file type '%s' is not in the allowlist",
+            file_name, file_id, file_type,
+        )
+        return None
+
+    # --- 5. Require a parser for binary files ---
+    if parser is None:
+        logger.warning(
+            "No parser provided — skipping binary file '%s' (ID: %s)", file_name, file_id
+        )
+        return None
+
+    # --- 6. Download and convert ---
+    logger.info("Downloading '%s' (ID: %s, type: %s)", file_name, file_id, file_type)
     request = service.files().get_media(fileId=file_id)
     file_stream = get_file_stream(request)
-    
-    doc = Document(file_stream)
-    text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-    return text
 
-def get_content_from_google(service, file_id, mime_type) -> str | None:
-    """
-    Router para funções de extração de conteúdo do Google Drive com base no tipo MIME do arquivo.
-    """
-    match mime_type:
-        case 'application/vnd.google-apps.document':
-            print(f"Extraindo conteúdo do Google Doc (ID: {file_id})")
-            return get_text_from_google_doc(service, file_id, output_type="text/markdown")
-        
-        case 'application/pdf':
-            print(f"Extraindo conteúdo do PDF (ID: {file_id})")
-            return get_text_from_pdf(service,file_id)
-        
-        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-            print(f"Extraindo conteúdo do DOCX (ID: {file_id})")
-            return get_text_from_docx(service,file_id) 
-          
-    return None
+    return parser.convert_stream(file_stream, file_name)
 
-def get_content_from_tree(service, tree: dict, current_path="") -> Iterator[dict[str, str]]:
+
+# ---------------------------------------------------------------------------
+# Tree walker
+# ---------------------------------------------------------------------------
+
+def get_content_from_tree(
+    service,
+    tree: dict,
+    current_path: str = "",
+    parser: DocumentParser | None = None,
+) -> Iterator[dict]:
     """
-    Percorre a árvore de pastas gerada pelo crawler recursivamente e baixa o conteúdo de cada arquivo, retornando um dicionário com metadados e conteúdo.
-    Caminhos relativos são construídos com base na estrutura da árvore.
+    Recursively walk the folder tree produced by the crawler and yield one
+    metadata dict per file, enriched with a ``"content"`` key when extraction
+    succeeds.
+
+    Parameters
+    ----------
+    service:
+        Authenticated Google Drive API resource.
+    tree:
+        Nested folder dict as returned by ``get_google_drive_tree``.
+    current_path:
+        Accumulated relative path string (used by recursive calls).
+    parser:
+        DocumentParser passed through to ``get_content_from_google``.
     """
+    # TODO: Batch the file downloads
     for folder_id, folder_data in tree.items():
-        # Constrói o caminho até a pasta atual
-        new_path = f"{current_path}/{folder_data['name']}" if current_path else folder_data['name']
+        new_path = f"{current_path}/{folder_data['name']}" if current_path else folder_data["name"]
 
-        # 1. Processa os arquivos da pasta atual
+        # Process files in the current folder
         files = folder_data.get("files", {})
         for file_id, file_meta in files.items():
-            file_meta["id"] = file_id            
+            file_meta["id"] = file_id
             file_meta["path"] = new_path
             mime_type = file_meta.get("mimeType", "")
-            content = get_content_from_google(service, file_id, mime_type)
+            content = get_content_from_google(
+                service,
+                file_id,
+                mime_type,
+                file_name=file_meta.get("name"),
+                parser=parser,
+            )
             if content is not None:
-                file_meta["content"] = content 
+                file_meta["content"] = content
             yield file_meta
 
-        # 2. Chama a função recursivamente para as subpastas
+        # Recurse into sub-folders
         subfolders = folder_data.get("folders", {})
         if subfolders:
-            yield from get_content_from_tree(service, subfolders, new_path)
+            yield from get_content_from_tree(service, subfolders, new_path, parser=parser)
 
 
 if __name__ == "__main__":
@@ -104,11 +199,17 @@ if __name__ == "__main__":
     import json
     import os
     from pathlib import Path
-    from auth import get_google_drive_service
 
-    parser = argparse.ArgumentParser(description="Extrai o conteúdo de arquivos do Google Drive a partir de uma árvore de diretórios.")
-    parser.add_argument("tree_file", type=str, help="O caminho para o arquivo JSON contendo a árvore de diretórios do Google Drive.")
-    args = parser.parse_args()
+    from MAVI.connectors.google_drive.auth import get_google_drive_service
+    from MAVI.parser import get_parser
+
+    arg_parser = argparse.ArgumentParser(
+        description="Extract content from Google Drive files using a directory tree JSON."
+    )
+    arg_parser.add_argument(
+        "tree_file", type=str, help="Path to the JSON file containing the Drive directory tree."
+    )
+    args = arg_parser.parse_args()
 
     tree_file = Path(args.tree_file)
 
@@ -118,9 +219,11 @@ if __name__ == "__main__":
     save_path = tree_file.parent / f"parsed_{tree_file.stem}.jsonl"
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
-    service = get_google_drive_service()
+    _service = get_google_drive_service()
+    _parser = get_parser()
+
     with open(save_path, "w", encoding="utf-8") as f:
-        for file_meta in get_content_from_tree(service, tree):
+        for file_meta in get_content_from_tree(_service, tree, parser=_parser):
             f.write(json.dumps(file_meta, ensure_ascii=False) + "\n")
 
-    print(f"Conteúdo extraído e salvo em {save_path}")
+    print(f"Content extracted and saved to {save_path}")
